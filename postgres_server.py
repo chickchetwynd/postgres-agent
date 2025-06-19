@@ -1,0 +1,170 @@
+from pydantic import BaseModel
+from typing import Optional, List
+import asyncpg
+import os
+from dotenv import load_dotenv
+from mcp.server.fastmcp import FastMCP
+import sqlparse
+from sqlparse.sql import Statement
+from sqlparse.tokens import DDL, DML
+
+load_dotenv()
+app = FastMCP()
+
+DB_CONFIG = {
+    "user": os.getenv("PGUSER"),
+    "password": os.getenv("PGPASSWORD"),
+    "database": os.getenv("PGDATABASE"),
+    "host": os.getenv("PGHOST"),
+}
+pool: Optional[asyncpg.Pool] = None
+
+async def get_pool() -> asyncpg.Pool:
+    global pool
+    if not pool:
+        pool = await asyncpg.create_pool(**DB_CONFIG)
+        print("✅ Connected to DB.")
+    return pool
+
+# Pydantic models
+class QueryResult(BaseModel):
+    data: Optional[List[dict]] = None
+    error: Optional[str] = None
+
+class TableList(BaseModel):
+    tables: List[str]
+
+class TableSchema(BaseModel):
+    columns: List[dict]
+
+class SQLValidationResult(BaseModel):
+    valid: bool
+    reason: Optional[str] = None
+
+class QueryMeta(BaseModel):
+    row_count: int
+    execution_time_ms: float
+    error: Optional[str] = None
+
+# Tools
+@app.tool()
+async def get_tables() -> TableList:
+    """Return all table names in the 'public' schema."""
+    db = await get_pool()
+    async with db.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+        """)
+        return TableList(tables=[r["table_name"] for r in rows])
+
+@app.tool()
+async def get_table_schema(table: str) -> TableSchema:
+    """Return schema for a given table, including column names and data types."""
+    db = await get_pool()
+    async with db.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = $1
+        """, table)
+        return TableSchema(columns=[dict(r) for r in rows])
+
+@app.tool()
+async def validate_sql(query: str) -> SQLValidationResult:
+    """
+    Validate that the SQL is safe (e.g., SELECT-only) using sqlparse.
+    """
+    try:
+        # Parse the SQL query into a list of statements
+        parsed = sqlparse.parse(query.strip())
+        
+        if not parsed:
+            return SQLValidationResult(valid=False, reason="Empty or invalid SQL query.")
+
+        for statement in parsed:
+            # Check if the statement is a SELECT query
+            if not statement.get_type() == "SELECT":
+                # Specifically check for modifying statements
+                if statement.get_type() in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE"]:
+                    return SQLValidationResult(valid=False, reason=f"{statement.get_type()} queries are not permitted.")
+                return SQLValidationResult(valid=False, reason="Only SELECT queries are allowed.")
+            
+            # Additional check for tokens that might indicate modifying operations
+            for token in statement.flatten():
+                if token.ttype in (DDL, DML) and token.value.upper() in ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE"]:
+                    return SQLValidationResult(valid=False, reason=f"{token.value.upper()} queries are not permitted.")
+
+        return SQLValidationResult(valid=True)
+    except Exception as e:
+        return SQLValidationResult(valid=False, reason=f"Invalid SQL query: {str(e)}")
+
+@app.tool()
+async def test_sql(query: str) -> QueryResult:
+    """Run the SQL with a LIMIT 1 to check for validity."""
+    # Validate the query again using validate_sql
+    validation = await validate_sql(query)
+    if not validation.valid:
+        return QueryResult(error=validation.reason)
+    
+    # Proceed with query execution
+    db = await get_pool()
+    async with db.acquire() as conn:
+        try:
+            limited_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT 1"
+            records = await conn.fetch(limited_query)
+            return QueryResult(data=[dict(r) for r in records])
+        except Exception as e:
+            return QueryResult(error=f"Query execution failed: {str(e)}")
+
+@app.tool()
+async def query_meta_data(query: str) -> QueryMeta:
+    """
+    Run a query and return its row count and execution time (in ms).
+    """
+    import time
+    # Validate the query using validate_sql
+    validation = await validate_sql(query)
+    if not validation.valid:
+        return QueryMeta(row_count=0, execution_time_ms=0, error=validation.reason)
+    
+    # Proceed with query execution
+    db = await get_pool()
+    async with db.acquire() as conn:
+        try:
+            # Wrap query in a COUNT to get row count efficiently
+            count_query = f"SELECT COUNT(*) FROM ({query.rstrip(';')}) AS subquery"
+            start = time.time()
+            count_result = await conn.fetchval(count_query)
+            elapsed = (time.time() - start) * 1000
+            return QueryMeta(row_count=count_result, execution_time_ms=elapsed)
+        except Exception as e:
+            return QueryMeta(row_count=0, execution_time_ms=0, error=f"Query execution failed: {str(e)}")
+
+@app.tool()
+async def run_query_route(query: str, max_rows: int = 10000) -> QueryResult:
+    """
+    Run the query and route results directly to user (not agent), after validating with validate_sql.
+    """
+    # Validate the query using validate_sql
+    validation = await validate_sql(query)
+    if not validation.valid:
+        return QueryResult(error=validation.reason)
+    
+    # Proceed with query execution
+    db = await get_pool()
+    async with db.acquire() as conn:
+        try:
+            # Wrap query with a LIMIT to prevent large result sets
+            limited_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
+            records = await conn.fetch(limited_query)
+            return QueryResult(data=[dict(r) for r in records])
+        except Exception as e:
+            return QueryResult(error=f"Query execution failed: {str(e)}")
+
+# Main
+if __name__ == "__main__":
+    app.run(transport="stdio")
+
+# !!! How does the run_query_route func ensure that the result is returned to the user not to claude?????
