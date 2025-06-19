@@ -143,6 +143,26 @@ async def query_meta_data(query: str) -> QueryMeta:
             return QueryMeta(row_count=0, execution_time_ms=0, error=f"Query execution failed: {str(e)}")
 
 @app.tool()
+async def run_query_return_data(query: str, max_rows: int = 10) -> QueryResult:
+    """
+    Run the SQL query and return results to the agent for reasoning.
+    Use only when the data volume is small (e.g., <10 rows).
+    """
+    validation = await validate_sql(query)
+    if not validation.valid:
+        return QueryResult(error=validation.reason)
+
+    db = await get_pool()
+    async with db.acquire() as conn:
+        try:
+            safe_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
+            records = await conn.fetch(safe_query)
+            return QueryResult(data=[dict(r) for r in records])
+        except Exception as e:
+            return QueryResult(error=f"Query execution failed: {str(e)}")
+
+
+@app.tool()
 async def run_query_route(query: str, max_rows: int = 10000) -> QueryResult:
     """
     Run the query and route results directly to user (not agent), after validating with validate_sql.

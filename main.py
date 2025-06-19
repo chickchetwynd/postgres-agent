@@ -25,6 +25,14 @@ async def main():
 
             try:
                 result = await agent.run(user_input)
+
+                if result.tool_calls:
+                    last_tool = result.tool_calls[-1]
+                    if last_tool.name == "run_query_route":
+                        print("📊 Large query result (routed directly):")
+                        print(last_tool.output)
+                        continue
+
                 print("Response:", result.output)
             except Exception as e:
                 print("Error:", str(e))
