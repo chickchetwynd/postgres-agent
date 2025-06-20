@@ -1,5 +1,7 @@
 import asyncio
 from pydantic_ai import Agent
+from pydantic import BaseModel
+from typing import Optional
 from pydantic_ai.mcp import MCPServerStdio
 from dotenv import load_dotenv
 
@@ -7,35 +9,40 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+class AgentFinalOutput(BaseModel):
+    sql: str
+    reasoning: str
+    file_path: Optional[str] = None
+    success: bool
+    error: Optional[str] = None
+
 postgres_server = MCPServerStdio(
     "python",
     args=["postgres_server.py"]
 )
 
-agent = Agent("anthropic:claude-3-opus-20240229", mcp_servers=[postgres_server])
+agent = Agent(
+    "anthropic:claude-3-opus-20240229",
+    mcp_servers=[postgres_server],
+    output_type=AgentFinalOutput
+)
 
 async def main():
-    print("Starting AI Agent (type 'exit' to quit)")
+    print("🚀 Starting AI Agent (type 'exit' to quit)")
     async with agent.run_mcp_servers():
         while True:
-            user_input = input("\n Prompt: ")
+            user_input = input("\n📝 Prompt: ")
             if user_input.strip().lower() in {"exit", "quit"}:
-                print("Exiting.")
+                print("👋 Exiting.")
                 break
 
             try:
                 result = await agent.run(user_input)
-
-                if result.tool_calls:
-                    last_tool = result.tool_calls[-1]
-                    if last_tool.name == "run_query_route":
-                        print("📊 Large query result (routed directly):")
-                        print(last_tool.output)
-                        continue
-
-                print("Response:", result.output)
+                output = result.output
+                print("\n📦 Final Agent Output:\n")
+                print(output.model_dump_json(indent=2))
             except Exception as e:
-                print("Error:", str(e))
+                print("❌ Error:", str(e))
 
 if __name__ == "__main__":
     asyncio.run(main())

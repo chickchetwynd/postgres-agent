@@ -7,6 +7,8 @@ from mcp.server.fastmcp import FastMCP
 import sqlparse
 from sqlparse.sql import Statement
 from sqlparse.tokens import DDL, DML
+import csv
+from uuid import uuid4
 
 load_dotenv()
 app = FastMCP()
@@ -44,6 +46,11 @@ class SQLValidationResult(BaseModel):
 class QueryMeta(BaseModel):
     row_count: int
     execution_time_ms: float
+    error: Optional[str] = None
+
+class SaveQueryResultsResponse(BaseModel):
+    success: bool
+    file_path: Optional[str] = None
     error: Optional[str] = None
 
 # Tools
@@ -140,51 +147,88 @@ async def query_meta_data(query: str) -> QueryMeta:
             elapsed = (time.time() - start) * 1000
             return QueryMeta(row_count=count_result, execution_time_ms=elapsed)
         except Exception as e:
-            return QueryMeta(row_count=0, execution_time_ms=0, error=f"Query execution failed: {str(e)}")
+           return QueryMeta(row_count=0, execution_time_ms=0, error=f"Query execution failed: {str(e)}")
+
 
 @app.tool()
-async def run_query_return_data(query: str, max_rows: int = 10) -> QueryResult:
+async def save_query_results(query: str) -> SaveQueryResultsResponse:
     """
-    Run the SQL query and return results to the agent for reasoning.
-    Use only when the data volume is small (e.g., <10 rows).
+    Execute a validated SQL query, save the result as a local CSV file,
+    and return the path. Does not return the query result to the agent.
     """
+    # Validate SQL before running
     validation = await validate_sql(query)
     if not validation.valid:
-        return QueryResult(error=validation.reason)
+        return SaveQueryResultsResponse(success=False, error=validation.reason)
 
     db = await get_pool()
     async with db.acquire() as conn:
         try:
-            safe_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
-            records = await conn.fetch(safe_query)
-            return QueryResult(data=[dict(r) for r in records])
+            records = await conn.fetch(query)
+            if not records:
+                return SaveQueryResultsResponse(success=False, error="Query returned no results.")
+
+            # Prepare file
+            os.makedirs("results", exist_ok=True)
+            filename = f"query_result_{uuid4().hex[:8]}.csv"
+            filepath = os.path.join("results", filename)
+
+            # Write CSV
+            with open(filepath, mode="w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(records[0].keys())  # CSV header
+                for row in records:
+                    writer.writerow(list(row.values()))
+
+            return SaveQueryResultsResponse(success=True, file_path=filepath)
+
         except Exception as e:
-            return QueryResult(error=f"Query execution failed: {str(e)}")
+            return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")
 
 
-@app.tool()
-async def run_query_route(query: str, max_rows: int = 10000) -> QueryResult:
-    """
-    Run the query and route results directly to user (not agent), after validating with validate_sql.
-    """
-    # Validate the query using validate_sql
-    validation = await validate_sql(query)
-    if not validation.valid:
-        return QueryResult(error=validation.reason)
-    
-    # Proceed with query execution
-    db = await get_pool()
-    async with db.acquire() as conn:
-        try:
-            # Wrap query with a LIMIT to prevent large result sets
-            limited_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
-            records = await conn.fetch(limited_query)
-            return QueryResult(data=[dict(r) for r in records])
-        except Exception as e:
-            return QueryResult(error=f"Query execution failed: {str(e)}")
+# Deprecating this tool
+#@app.tool()
+#async def run_query_return_data(query: str, max_rows: int = 10) -> QueryResult:
+#    """
+#    Run the SQL query and return results to the agent for reasoning.
+#    Use only when the data volume is small (e.g., <10 rows).
+#    """
+#    validation = await validate_sql(query)
+#    if not validation.valid:
+#        return QueryResult(error=validation.reason)
+#
+#    db = await get_pool()
+#    async with db.acquire() as conn:
+#        try:
+#            safe_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
+#            records = await conn.fetch(safe_query)
+#            return QueryResult(data=[dict(r) for r in records])
+#        except Exception as e:
+#            return QueryResult(error=f"Query execution failed: {str(e)}")
+
+
+# Deprecating this as a tool
+#@app.tool()
+#async def run_query_route(query: str, max_rows: int = 10000) -> QueryResult:
+#    """
+#    Run the query and route results directly to user (not agent), after validating with validate_sql.
+#    """
+#    # Validate the query using validate_sql
+#    validation = await validate_sql(query)
+#    if not validation.valid:
+#        return QueryResult(error=validation.reason)
+#    
+#    # Proceed with query execution
+#    db = await get_pool()
+#    async with db.acquire() as conn:
+#        try:
+#            # Wrap query with a LIMIT to prevent large result sets
+#            limited_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
+#            records = await conn.fetch(limited_query)
+#            return QueryResult(data=[dict(r) for r in records])
+#        except Exception as e:
+#            return QueryResult(error=f"Query execution failed: {str(e)}")
 
 # Main
 if __name__ == "__main__":
     app.run(transport="stdio")
-
-# !!! How does the run_query_route func ensure that the result is returned to the user not to claude?????
