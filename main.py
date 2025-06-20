@@ -1,4 +1,5 @@
 import asyncio
+from agent_prompt import system_prompt
 from pydantic_ai import Agent
 from pydantic import BaseModel
 from typing import Optional
@@ -24,7 +25,8 @@ postgres_server = MCPServerStdio(
 agent = Agent(
     "anthropic:claude-3-opus-20240229",
     mcp_servers=[postgres_server],
-    output_type=AgentFinalOutput
+    output_type=AgentFinalOutput,
+    instructions=system_prompt
 )
 
 async def main():
