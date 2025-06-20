@@ -7,7 +7,7 @@ requires-python = ">=3.10"  # MCP support requires Python 3.10+
 dependencies = [
     "asyncpg>=0.30.0",
     "psycopg2-binary>=2.9.10",
-    "pydantic-ai>=0.2.18",
+    "pydantic-ai[logfire]>=0.2.18",
     "python-dotenv>=1.1.0",
-    "sqlparse>=0.4.4"
+    "sqlparse>=0.4.4",
 ]

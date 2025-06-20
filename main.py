@@ -5,10 +5,13 @@ from pydantic import BaseModel
 from typing import Optional
 from pydantic_ai.mcp import MCPServerStdio
 from dotenv import load_dotenv
+import logfire
 
 
 load_dotenv()
 
+logfire.configure()
+logfire.instrument_pydantic_ai()
 
 class AgentFinalOutput(BaseModel):
     sql: str
