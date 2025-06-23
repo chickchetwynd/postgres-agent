@@ -66,6 +66,10 @@ class TableMetadata(BaseModel):
 class RichTableList(BaseModel):
     tables: List[TableMetadata]
 
+class DistinctValuesResponse(BaseModel):
+    values: list[str]
+    error: str | None = None
+
 
 # Tools
 @app.tool()
@@ -183,6 +187,27 @@ async def test_sql(query: str) -> QueryResult:
         except Exception as e:
             return QueryResult(error=f"Query execution failed: {str(e)}")
 
+
+@app.tool()
+async def get_distinct_values(table: str, column: str) -> DistinctValuesResponse:
+    """
+    Return the distinct values for a given column in a specific table.
+    Useful for understanding category values like channel names or activity types.
+    """
+    db = await get_pool()
+    async with db.acquire() as conn:
+        try:
+            query = f"""
+                SELECT DISTINCT {column}
+                FROM {table}
+                WHERE {column} IS NOT NULL
+                LIMIT 100
+            """
+            rows = await conn.fetch(query)
+            return DistinctValuesResponse(values=[str(r[column]) for r in rows])
+        except Exception as e:
+            return DistinctValuesResponse(values=[], error=str(e))
+
 @app.tool()
 async def query_meta_data(query: str) -> QueryMeta:
     """
@@ -242,50 +267,6 @@ async def save_query_results(query: str) -> SaveQueryResultsResponse:
 
         except Exception as e:
             return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")
-
-
-# Deprecating this tool
-#@app.tool()
-#async def run_query_return_data(query: str, max_rows: int = 10) -> QueryResult:
-#    """
-#    Run the SQL query and return results to the agent for reasoning.
-#    Use only when the data volume is small (e.g., <10 rows).
-#    """
-#    validation = await validate_sql(query)
-#    if not validation.valid:
-#        return QueryResult(error=validation.reason)
-#
-#    db = await get_pool()
-#    async with db.acquire() as conn:
-#        try:
-#            safe_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
-#            records = await conn.fetch(safe_query)
-#            return QueryResult(data=[dict(r) for r in records])
-#        except Exception as e:
-#            return QueryResult(error=f"Query execution failed: {str(e)}")
-
-
-# Deprecating this as a tool
-#@app.tool()
-#async def run_query_route(query: str, max_rows: int = 10000) -> QueryResult:
-#    """
-#    Run the query and route results directly to user (not agent), after validating with validate_sql.
-#    """
-#    # Validate the query using validate_sql
-#    validation = await validate_sql(query)
-#    if not validation.valid:
-#        return QueryResult(error=validation.reason)
-#    
-#    # Proceed with query execution
-#    db = await get_pool()
-#    async with db.acquire() as conn:
-#        try:
-#            # Wrap query with a LIMIT to prevent large result sets
-#            limited_query = f"SELECT * FROM ({query.rstrip(';')}) AS subquery LIMIT {max_rows}"
-#            records = await conn.fetch(limited_query)
-#            return QueryResult(data=[dict(r) for r in records])
-#        except Exception as e:
-#            return QueryResult(error=f"Query execution failed: {str(e)}")
 
 # Main
 if __name__ == "__main__":
