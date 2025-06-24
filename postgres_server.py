@@ -12,7 +12,6 @@ from sqlparse.tokens import DDL, DML
 import csv
 from uuid import uuid4
 import redis.asyncio as redis
-from redis_client import redis_client
 
 load_dotenv()
 app = FastMCP()
@@ -80,15 +79,21 @@ class DistinctValuesResponse(BaseModel):
 @app.tool()
 async def get_tables() -> RichTableList:
     """
-     Returns a list of all tables in the public schema, including:
-    - Table name
-    - Optional table description (from Postgres comments)
-    - Any foreign key relationships (i.e., which columns link to other tables)
-    Use this tool at the beginning of a run to explore available tables, understand their purpose, and identify potential join paths across the schema. This metadata helps determine which tables are relevant to the user’s request and how they relate to one another.
+    Returns a list of all tables in the public schema...
     """
+    # Try cache first
+    cached = await redis_client.get("tables_metadata_cache")
+    if cached:
+        try:
+            data = json.loads(cached)
+            return RichTableList.model_validate(data)
+        except (json.JSONDecodeError, ValidationError):
+            pass  # Fallback to querying Postgres
+
+    # Connect to Postgres
     db = await get_pool()
     async with db.acquire() as conn:
-# Get table names and comments
+        # Query table names and comments
         table_rows = await conn.fetch("""
             SELECT c.relname AS table_name,
                    pg_catalog.obj_description(c.oid) AS comment
@@ -98,7 +103,7 @@ async def get_tables() -> RichTableList:
               AND n.nspname = 'public'
         """)
 
-# Get all foreign key relationships
+        # Query foreign keys
         fk_rows = await conn.fetch("""
             SELECT
                 tc.table_name,
@@ -115,7 +120,7 @@ async def get_tables() -> RichTableList:
             WHERE tc.constraint_type = 'FOREIGN KEY'
         """)
 
-# Map foreign keys by table
+        # Map FKs by table
         fk_map: dict[str, list[ForeignKeyInfo]] = {}
         for row in fk_rows:
             fk = ForeignKeyInfo(
@@ -125,7 +130,7 @@ async def get_tables() -> RichTableList:
             )
             fk_map.setdefault(row["table_name"], []).append(fk)
 
-# Build final response
+        # Build final response
         tables = [
             TableMetadata(
                 table_name=row["table_name"],
@@ -135,7 +140,16 @@ async def get_tables() -> RichTableList:
             for row in table_rows
         ]
 
-        return RichTableList(tables=tables)
+        result = RichTableList(tables=tables)
+
+        # Save to Redis as JSON
+        await redis_client.set(
+            "tables_metadata_cache",
+            json.dumps(result.model_dump()),
+            ex=3600  # optional: 1 hour TTL
+        )
+
+        return result
 
 @app.tool()
 async def get_table_schema(table: str) -> TableSchema:
