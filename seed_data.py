@@ -26,12 +26,13 @@ async def seed_data():
 
     # Delete data
     await conn.execute("DELETE FROM campaign_metrics")
-    await conn.execute("DELETE FROM campaigns")
+    await conn.execute("DELETE FROM utm_tracking") 
+    await conn.execute("DELETE FROM page_visits")
     await conn.execute("DELETE FROM activities")
     await conn.execute("DELETE FROM accounts")
-    await conn.execute("DELETE FROM page_visits")
-    await conn.execute("DELETE FROM utm_tracking")
     await conn.execute("DELETE FROM leads")
+    await conn.execute("DELETE FROM campaigns")
+
 
     # Reset ID sequences
     await conn.execute("ALTER SEQUENCE leads_id_seq RESTART WITH 1")
@@ -129,6 +130,31 @@ async def seed_data():
         ))
     await conn.executemany(
         "INSERT INTO campaigns (name, type, start_date, end_date) VALUES ($1, $2, $3, $4)", campaigns
+    )
+
+
+    # Campaign Metrics
+    campaign_ids = list(range(1, 101))  # Assuming 100 campaigns were inserted
+    metrics = []
+    for cid in campaign_ids:
+        sent = random.randint(500, 10000)
+        clicks = random.randint(0, sent)
+        conversions = random.randint(0, clicks)
+        deal_size = conversions * random.randint(500, 5000)  # simulate revenue impact
+        metrics.append((
+            cid,
+            sent,
+            clicks,
+            conversions,
+            deal_size
+        ))
+
+    await conn.executemany(
+        """
+        INSERT INTO campaign_metrics (campaign_id, sent, clicks, conversions, deal_size)
+        VALUES ($1, $2, $3, $4, $5)
+        """,
+        metrics
     )
 
     
