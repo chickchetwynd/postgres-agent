@@ -79,7 +79,7 @@ class DistinctValuesResponse(BaseModel):
 @app.tool()
 async def get_tables() -> RichTableList:
     """
-    Returns a list of all tables in the public schema...
+    Returns information from the database including table names, table descriptions, and foreign key relationships.
     """
     # Try cache first
     cached = await redis_client.get("tables_metadata_cache")
