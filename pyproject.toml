@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"  # MCP support requires Python 3.10+
 dependencies = [
     "asyncpg>=0.30.0",
+    "faker>=37.4.0",
     "psycopg2-binary>=2.9.10",
     "pydantic-ai[logfire]>=0.2.18",
     "python-dotenv>=1.1.0",
