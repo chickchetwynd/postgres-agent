@@ -1,4 +1,6 @@
 from pydantic import BaseModel
+from pydantic import ValidationError
+import json
 from typing import Optional, List
 import asyncpg
 import os
@@ -9,9 +11,12 @@ from sqlparse.sql import Statement
 from sqlparse.tokens import DDL, DML
 import csv
 from uuid import uuid4
+import redis.asyncio as redis
+from redis_client import redis_client
 
 load_dotenv()
 app = FastMCP()
+redis_client = redis.Redis()
 
 DB_CONFIG = {
     "user": os.getenv("PGUSER"),
