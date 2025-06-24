@@ -75,7 +75,11 @@ class DistinctValuesResponse(BaseModel):
 @app.tool()
 async def get_tables() -> RichTableList:
     """
-    Return all table names along with comments and foreign key relationships.
+     Returns a list of all tables in the public schema, including:
+    - Table name
+    - Optional table description (from Postgres comments)
+    - Any foreign key relationships (i.e., which columns link to other tables)
+    Use this tool at the beginning of a run to explore available tables, understand their purpose, and identify potential join paths across the schema. This metadata helps determine which tables are relevant to the user’s request and how they relate to one another.
     """
     db = await get_pool()
     async with db.acquire() as conn:
@@ -130,7 +134,11 @@ async def get_tables() -> RichTableList:
 
 @app.tool()
 async def get_table_schema(table: str) -> TableSchema:
-    """Return schema for a given table, including column names and data types."""
+    """
+    Returns the schema of a specific table, including:
+    - Column names
+    - Data types
+    """
     db = await get_pool()
     async with db.acquire() as conn:
         rows = await conn.fetch("""
@@ -192,7 +200,13 @@ async def test_sql(query: str) -> QueryResult:
 async def get_distinct_values(table: str, column: str) -> DistinctValuesResponse:
     """
     Return the distinct values for a given column in a specific table.
-    Useful for understanding category values like channel names or activity types.
+
+    Use this tool when you need to:
+    - Understand possible values in a categorical column
+    - Disambiguate user input by inspecting how values are spelled or capitalized
+    - Prepare for GROUP BY operations or filters based on specific values
+
+    Limits to 100 values to avoid overwhelming the prompt. Returns an error if the column or table is invalid.
     """
     db = await get_pool()
     async with db.acquire() as conn:
@@ -208,37 +222,42 @@ async def get_distinct_values(table: str, column: str) -> DistinctValuesResponse
         except Exception as e:
             return DistinctValuesResponse(values=[], error=str(e))
 
-@app.tool()
-async def query_meta_data(query: str) -> QueryMeta:
-    """
-    Run a query and return its row count and execution time (in ms).
-    """
-    import time
-    # Validate the query using validate_sql
-    validation = await validate_sql(query)
-    if not validation.valid:
-        return QueryMeta(row_count=0, execution_time_ms=0, error=validation.reason)
-    
-    # Proceed with query execution
-    db = await get_pool()
-    async with db.acquire() as conn:
-        try:
-            # Wrap query in a COUNT to get row count efficiently
-            count_query = f"SELECT COUNT(*) FROM ({query.rstrip(';')}) AS subquery"
-            start = time.time()
-            count_result = await conn.fetchval(count_query)
-            elapsed = (time.time() - start) * 1000
-            return QueryMeta(row_count=count_result, execution_time_ms=elapsed)
-        except Exception as e:
-           return QueryMeta(row_count=0, execution_time_ms=0, error=f"Query execution failed: {str(e)}")
+# deprecated tool
+#@app.tool()
+#async def query_meta_data(query: str) -> QueryMeta:
+#    """
+#    Run a query and return its row count and execution time (in ms).
+#    """
+#    import time
+#    # Validate the query using validate_sql
+#    validation = await validate_sql(query)
+#    if not validation.valid:
+#        return QueryMeta(row_count=0, execution_time_ms=0, error=validation.reason)
+#    
+#    # Proceed with query execution
+#    db = await get_pool()
+#    async with db.acquire() as conn:
+#        try:
+#            # Wrap query in a COUNT to get row count efficiently
+#            count_query = f"SELECT COUNT(*) FROM ({query.rstrip(';')}) AS subquery"
+#            start = time.time()
+#            count_result = await conn.fetchval(count_query)
+#            elapsed = (time.time() - start) * 1000
+#            return QueryMeta(row_count=count_result, execution_time_ms=elapsed)
+#        except Exception as e:
+#           return QueryMeta(row_count=0, execution_time_ms=0, error=f"Query execution failed: {str(e)}")
 
 
 @app.tool()
 async def save_query_results(query: str) -> SaveQueryResultsResponse:
     """
-    Execute a validated SQL query, save the result as a local CSV file,
-    and return the path. Does not return the query result to the agent.
+    Execute a validated SQL SELECT query and save the results to a local CSV file.
+
+    Use this tool **only after** a query has been:
+    1. Validated using validate_sql(query)
+    2. Tested with test_sql(query) to ensure correctness and usefulness
     """
+
     # Validate SQL before running
     validation = await validate_sql(query)
     if not validation.valid:
