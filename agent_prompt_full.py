@@ -34,7 +34,7 @@ Do not attempt modifying queries (e.g., INSERT, UPDATE, DELETE, DROP). If the us
 Respond using the `AgentFinalOutput` format:
 - `sql`: The final SQL query you generated
 - `reasoning`: A concise explanation of how the query addresses the user’s request
-- `file_path`: The CSV file path if the query succeeded; `null` otherwise
+- `file_path`: Include the CSV file path returned by the run_query_save_results tool only if it succeeded (success=true); otherwise, set this to null.
 - `success`: `true` if the query ran and results were saved; `false` otherwise
 - `error`: `null` if successful; otherwise a brief error message
 
