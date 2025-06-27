@@ -1,6 +1,8 @@
 # 🧠 AI Postgres Agent
 
-This project is an AI-powered Postgres Agent designed to help users explore and query their PostgreSQL database using natural language. Built using the [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol), it uses structured tool calling, metadata caching, and SQL validation to safely run SELECT-only queries and return the results in CSV format.
+This project is an AI-powered Postgres Agent designed to help users explore and query their PostgreSQL database using natural language. Built using the [Model Context Protocol (MCP)](https://github.com/modelcontextprotocol), it uses structured tool calling, metadata caching, and SQL validation to safely run SELECT-only queries and return the results in CSV format. This readme also contains everything that you need to populate your Postgres database with some mock crm type data to test the agent with:
+
+![Entity relationship diagram of the mock data](images/entity_relationship_diagram.png)
 
 ---
 
