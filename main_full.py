@@ -4,7 +4,7 @@ from agent_prompt_full import system_prompt_full
 from pydantic_ai import Agent
 from pydantic import BaseModel
 from typing import Optional
-from pydantic_ai.mcp import MCPServerStdio
+from pydantic_ai.mcp import MCPServerStreamableHTTP
 from dotenv import load_dotenv
 import logfire
 
@@ -25,10 +25,7 @@ class AgentFinalOutput(BaseModel):
     confidence: float
 
 # Link to new full metadata MCP server
-full_postgres_server = MCPServerStdio(
-    "python",
-    args=["full_postgres_server.py"]
-)
+full_postgres_server = MCPServerStreamableHTTP('http://127.0.0.1:8000/mcp')
 
 # Full metadata agent
 agent = Agent(

@@ -156,13 +156,18 @@ This will populate your tables with randomly generated data that you can test th
 
 ### Run the Agent
 
-Now with everything in place, you can run the agent! Run:
+Now that postgres is setup and ready, let's run the agent. We will need to run the MCP server first:
+
+```bash
+fastmcp run full_postgres_server.py --transport streamable-http
+```
+Then in a separate terminal, run:
 
 ```
 uv run main_full.py
 ```
 
-The terminal will now ask for you to prompt the agent. Ask a question like, "List enterprise accounts with no contact in 30+ days".
+The terminal will now ask for you to prompt the agent. Ask a question like, "List enterprise accounts with no contact in 30+ days". The MCP client will communicate with the server through http.
 
 
 ### Observing the agent

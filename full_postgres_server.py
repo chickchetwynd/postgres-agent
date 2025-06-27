@@ -10,13 +10,14 @@ from sqlparse.sql import Statement
 import asyncpg
 from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
-from mcp.server.fastmcp import FastMCP
+# from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from metadata_cache import PostgresMetadataCache
 
 # Load environment
 load_dotenv()
 
-app = FastMCP(request_timeout=600)
+app = FastMCP()
 
 # Postgres config
 DB_CONFIG = {
@@ -154,4 +155,5 @@ async def run_query_save_results(query: str) -> SaveQueryResultsResponse:
 
 # ---------- Main ----------
 if __name__ == "__main__":
-    app.run(transport="stdio")
+    app.run()
+    
