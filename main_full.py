@@ -19,6 +19,8 @@ class AgentFinalOutput(BaseModel):
     reasoning: str
     file_path: Optional[str] = None
     success: bool
+    row_count: Optional[int] = None
+    query_time_ms: Optional[int] = None
     error: Optional[str] = None
 
 # Link to new full metadata MCP server

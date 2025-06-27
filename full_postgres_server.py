@@ -1,6 +1,7 @@
 import os
 import json
 import csv
+import time
 from uuid import uuid4
 from typing import Optional, List, Dict
 import sqlparse
@@ -66,6 +67,8 @@ class DatabaseMetadata(BaseModel):
 class SaveQueryResultsResponse(BaseModel):
     success: bool
     file_path: Optional[str] = None
+    row_count: Optional[int] = None
+    query_time_ms: Optional[int] = None
     error: Optional[str] = None
 
 
@@ -239,13 +242,16 @@ async def run_query_save_results(query: str) -> SaveQueryResultsResponse:
         return SaveQueryResultsResponse(success=False, error=f"SQL validation error: {str(e)}")
 
     # --- Step 2: Execute and Save ---
+    start = time.time()
     db = await get_pool()
     async with db.acquire() as conn:
         try:
             records = await conn.fetch(query)
+            end = time.time()
             if not records:
                 return SaveQueryResultsResponse(success=False, error="Query returned no results.")
 
+            row_count = len(records)
             os.makedirs("results", exist_ok=True)
             filename = f"query_result_{uuid4().hex[:8]}.csv"
             filepath = os.path.join("results", filename)
@@ -256,7 +262,7 @@ async def run_query_save_results(query: str) -> SaveQueryResultsResponse:
                 for row in records:
                     writer.writerow(list(row.values()))
 
-            return SaveQueryResultsResponse(success=True, file_path=filepath)
+            return SaveQueryResultsResponse(success=True, file_path=filepath, row_count=row_count, query_time_ms=int((end - start) * 1000))
 
         except Exception as e:
             return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")
