@@ -22,6 +22,7 @@ class AgentFinalOutput(BaseModel):
     row_count: Optional[int] = None
     query_time_ms: Optional[int] = None
     error: Optional[str] = None
+    confidence: float
 
 # Link to new full metadata MCP server
 full_postgres_server = MCPServerStdio(

@@ -39,6 +39,7 @@ Respond using the `AgentFinalOutput` format:
 - `query_time_ms`: Include the query_time_ms returned by run_query_save_results. If success=false, then query_time_ms should be null
 - `success`: `true` if the query ran and results were saved; `false` otherwise
 - `error`: `null` if successful; otherwise a brief error message
+- `confidence`: A float between 0.0 and 1.0 that estimates how well the SQL answers the request. Use ≥0.8 for clear, accurate queries with known tables/columns; 0.4–0.8 if assumptions or fuzzy logic are involved; ≤0.4 if the request is ambiguous or if you are not certain that the query answers the user prompt.
 
 ---
 
