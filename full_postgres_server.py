@@ -6,45 +6,16 @@ from uuid import uuid4
 from typing import Optional, List, Dict
 import sqlparse
 from sqlparse.tokens import DDL, DML
-from sqlparse.sql import Statement
 import asyncpg
-from dotenv import load_dotenv
-from pydantic import BaseModel, ValidationError
-# from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel
 from fastmcp import FastMCP
 from metadata_cache import PostgresMetadataCache
 
-# Load environment
-load_dotenv()
+
 
 app = FastMCP()
 
-# Postgres config
-DB_CONFIG = {
-    "user": os.getenv("PGUSER"),
-    "password": os.getenv("PGPASSWORD"),
-    "database": os.getenv("PGDATABASE"),
-    "host": os.getenv("PGHOST"),
-}
-pool: Optional[asyncpg.Pool] = None
-
-async def get_pool() -> asyncpg.Pool:
-    global pool
-    if not pool:
-        pool = await asyncpg.create_pool(**DB_CONFIG)
-        print("✅ Connected to DB.")
-    return pool
-
-metadata_cache: PostgresMetadataCache | None = None
-
-async def get_metadata_cache() -> PostgresMetadataCache:
-    global metadata_cache
-    if metadata_cache is None:
-        db = await get_pool()
-        metadata_cache = PostgresMetadataCache(db)
-    return metadata_cache
-
-# ---------- Pydantic Models ----------
+# Pydantic Models
 class ForeignKeyInfo(BaseModel):
     column: str
     referenced_table: str
@@ -72,11 +43,17 @@ class SaveQueryResultsResponse(BaseModel):
     query_time_ms: Optional[int] = None
     error: Optional[str] = None
 
+# Add DatabaseConfig model for MCP tools
+class DatabaseConfig(BaseModel):
+    user: str
+    password: str
+    database: str
+    host: str
+    port: int = 5432
 
 # tools
-
 @app.tool()
-async def get_db_metadata() -> DatabaseMetadata:
+async def get_db_metadata(db_config: DatabaseConfig) -> DatabaseMetadata:
     """
     Returns full database metadata including:
     - table names and descriptions
@@ -85,30 +62,49 @@ async def get_db_metadata() -> DatabaseMetadata:
     - low-cardinality distinct values
     - 1 example row per table
     """
+    try:
+        conn = await asyncpg.connect(
+            user=db_config.user,
+            password=db_config.password,
+            database=db_config.database,
+            host=db_config.host,
+            port=db_config.port
+        )
 
-    cache = await get_metadata_cache()
-    cache_key = "full_metadata_cache"
-    ttl_minutes = 60
+        cache = PostgresMetadataCache(conn)
+        cache_key = "full_metadata_cache"
+        ttl_minutes = 60
 
-    # Try cache first
-    cached = await cache.get(cache_key=cache_key, ttl_minutes=ttl_minutes)
-    if cached:
-        return cached
+        # Try cache first
+        cached = await cache.get(cache_key=cache_key, ttl_minutes=ttl_minutes)
+        if cached:
+            # Handle the case where cached might be a string
+            if isinstance(cached, str):
+                cached = json.loads(cached)
+            
+            if isinstance(cached, dict):
+                return DatabaseMetadata(**cached)
+            else:
+                print(f"DEBUG: Cached data is not a dict: {type(cached)}")
 
-    # Cache is missing or expired — regenerate
-    await cache.clear(cache_key)
-    new_metadata = await cache.generate_metadata()
-    await cache.set(cache_key=cache_key, data=new_metadata)
+        # Cache is missing or expired — regenerate
+        await cache.clear(cache_key)
+        new_metadata = await cache.generate_metadata()
+        await cache.set(cache_key=cache_key, data=new_metadata)
 
-    return new_metadata
-
+        # Ensure new_metadata is a dict
+        if isinstance(new_metadata, dict):
+            return DatabaseMetadata(**new_metadata)
+        else:
+            raise ValueError(f"Generated metadata is not a dict: {type(new_metadata)}")
+    finally:
+        await conn.close()
 
 @app.tool()
-async def run_query_save_results(query: str) -> SaveQueryResultsResponse:
+async def run_query_save_results(query: str, db_config: DatabaseConfig) -> SaveQueryResultsResponse:
     """
     Validates the SQL (SELECT-only), runs it, and saves results to a local CSV file.
     """
-
     # --- Step 1: Validate SQL ---
     try:
         parsed = sqlparse.parse(query.strip())
@@ -127,31 +123,37 @@ async def run_query_save_results(query: str) -> SaveQueryResultsResponse:
 
     # --- Step 2: Execute and Save ---
     start = time.time()
-    db = await get_pool()
-    async with db.acquire() as conn:
-        try:
-            records = await conn.fetch(query)
-            end = time.time()
-            if not records:
-                return SaveQueryResultsResponse(success=False, error="Query returned no results.")
+    try:
+        conn = await asyncpg.connect(
+            user=db_config.user,
+            password=db_config.password,
+            database=db_config.database,
+            host=db_config.host,
+            port=db_config.port
+        )
+        
+        records = await conn.fetch(query)
+        end = time.time()
+        if not records:
+            return SaveQueryResultsResponse(success=False, error="Query returned no results.")
 
-            row_count = len(records)
-            os.makedirs("results", exist_ok=True)
-            filename = f"query_result_{uuid4().hex[:8]}.csv"
-            filepath = os.path.join("results", filename)
+        row_count = len(records)
+        os.makedirs("results", exist_ok=True)
+        filename = f"query_result_{uuid4().hex[:8]}.csv"
+        filepath = os.path.join("results", filename)
 
-            with open(filepath, mode="w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow(records[0].keys())  # CSV header
-                for row in records:
-                    writer.writerow(list(row.values()))
+        with open(filepath, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(records[0].keys())  # CSV header
+            for row in records:
+                writer.writerow(list(row.values()))
 
-            return SaveQueryResultsResponse(success=True, file_path=filepath, row_count=row_count, query_time_ms=int((end - start) * 1000))
+        return SaveQueryResultsResponse(success=True, file_path=filepath, row_count=row_count, query_time_ms=int((end - start) * 1000))
 
-        except Exception as e:
-            return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")
-
-
+    except Exception as e:
+        return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")
+    finally:
+        await conn.close()
 
 # ---------- Main ----------
 if __name__ == "__main__":
