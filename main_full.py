@@ -19,7 +19,7 @@ logfire.instrument_pydantic_ai()
 class AgentFinalOutput(BaseModel):
     sql: str
     reasoning: str
-    file_path: Optional[str] = None
+    s3_url: Optional[str] = None
     success: bool
     row_count: Optional[int] = None
     query_time_ms: Optional[int] = None
@@ -59,17 +59,18 @@ async def process_tool_call(
         "port": 5432
     }
     
-    # Add S3 config to the tool arguments
-    s3_config = {
-        "aws_access_key_id": ctx.deps.s3_config.aws_access_key_id,
-        "aws_secret_access_key": ctx.deps.s3_config.aws_secret_access_key,
-        "aws_region": ctx.deps.s3_config.aws_region,
-        "s3_bucket_name": ctx.deps.s3_config.s3_bucket_name,
-    }
-    
     # Add configs to the tool arguments
     args['db_config'] = db_config
-    args['s3_config'] = s3_config
+    
+    # Only inject S3 config for tools that need it
+    if tool_name == "run_query_save_results":
+        s3_config = {
+            "aws_access_key_id": ctx.deps.s3_config.aws_access_key_id,
+            "aws_secret_access_key": ctx.deps.s3_config.aws_secret_access_key,
+            "aws_region": ctx.deps.s3_config.aws_region,
+            "s3_bucket_name": ctx.deps.s3_config.s3_bucket_name,
+        }
+        args['s3_config'] = s3_config
     
     return await call_tool(tool_name, args, {})
 
