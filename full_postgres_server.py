@@ -78,25 +78,14 @@ async def get_db_metadata(db_config: DatabaseConfig) -> DatabaseMetadata:
         # Try cache first
         cached = await cache.get(cache_key=cache_key, ttl_minutes=ttl_minutes)
         if cached:
-            # Handle the case where cached might be a string
-            if isinstance(cached, str):
-                cached = json.loads(cached)
-            
-            if isinstance(cached, dict):
-                return DatabaseMetadata(**cached)
-            else:
-                print(f"DEBUG: Cached data is not a dict: {type(cached)}")
+            return DatabaseMetadata(**cached)
 
         # Cache is missing or expired — regenerate
         await cache.clear(cache_key)
         new_metadata = await cache.generate_metadata()
         await cache.set(cache_key=cache_key, data=new_metadata)
 
-        # Ensure new_metadata is a dict
-        if isinstance(new_metadata, dict):
-            return DatabaseMetadata(**new_metadata)
-        else:
-            raise ValueError(f"Generated metadata is not a dict: {type(new_metadata)}")
+        return DatabaseMetadata(**new_metadata)
     finally:
         await conn.close()
 

@@ -21,7 +21,10 @@ class PostgresMetadataCache:
         if datetime.now(timezone.utc) - created_at > timedelta(minutes=ttl_minutes):
             return None
         
-        return row["data"]
+        data = row["data"]
+        if isinstance(data, str):
+            return json.loads(data)
+        return data
 
     async def set(self, cache_key: str, data: dict) -> None:
         await self.conn.execute("""
