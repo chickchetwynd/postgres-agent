@@ -52,8 +52,10 @@ class DatabaseConfig(BaseModel):
     port: int = 5432
 
 # tools
-@app.tool()
-async def get_db_metadata(db_config: DatabaseConfig) -> DatabaseMetadata:
+@app.tool(
+    exclude_args=["db_config"]
+)
+async def get_db_metadata(db_config: Optional[DatabaseConfig] = None) -> DatabaseMetadata:
     """
     Returns full database metadata including:
     - table names and descriptions
@@ -62,6 +64,9 @@ async def get_db_metadata(db_config: DatabaseConfig) -> DatabaseMetadata:
     - low-cardinality distinct values
     - 1 example row per table
     """
+    
+    assert db_config is not None, "db_config is required but was not provided"
+
     try:
         conn = await asyncpg.connect(
             user=db_config.user,
@@ -89,11 +94,17 @@ async def get_db_metadata(db_config: DatabaseConfig) -> DatabaseMetadata:
     finally:
         await conn.close()
 
-@app.tool()
-async def run_query_save_results(query: str, db_config: DatabaseConfig) -> SaveQueryResultsResponse:
+@app.tool(
+    exclude_args=["db_config"]
+)
+async def run_query_save_results(query: str, db_config: Optional[DatabaseConfig] = None) -> SaveQueryResultsResponse:
     """
     Validates the SQL (SELECT-only), runs it, and saves results to a local CSV file.
     """
+    # db_config will be injected by process_tool_call, not provided by LLM
+
+    assert db_config is not None, "db_config is required but was not provided"
+
     # --- Step 1: Validate SQL ---
     try:
         parsed = sqlparse.parse(query.strip())
