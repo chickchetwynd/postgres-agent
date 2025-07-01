@@ -2,6 +2,7 @@ import os
 import json
 import csv
 import time
+from datetime import datetime
 from uuid import uuid4
 from typing import Optional, List, Dict
 import sqlparse
@@ -10,6 +11,7 @@ import asyncpg
 from pydantic import BaseModel
 from fastmcp import FastMCP
 from metadata_cache import PostgresMetadataCache
+import aioboto3
 
 
 
@@ -38,7 +40,7 @@ class DatabaseMetadata(BaseModel):
 
 class SaveQueryResultsResponse(BaseModel):
     success: bool
-    file_path: Optional[str] = None
+    s3_url: Optional[str] = None
     row_count: Optional[int] = None
     query_time_ms: Optional[int] = None
     error: Optional[str] = None
@@ -50,6 +52,13 @@ class DatabaseConfig(BaseModel):
     database: str
     host: str
     port: int = 5432
+
+# Add S3Config model for MCP tools
+class S3Config(BaseModel):
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_region: str
+    s3_bucket_name: str
 
 # tools
 @app.tool(
@@ -95,15 +104,16 @@ async def get_db_metadata(db_config: Optional[DatabaseConfig] = None) -> Databas
         await conn.close()
 
 @app.tool(
-    exclude_args=["db_config"]
+    exclude_args=["db_config", "s3_config"]
 )
-async def run_query_save_results(query: str, db_config: Optional[DatabaseConfig] = None) -> SaveQueryResultsResponse:
+async def run_query_save_results(query: str, db_config: Optional[DatabaseConfig] = None, s3_config: Optional[S3Config] = None) -> SaveQueryResultsResponse:
     """
-    Validates the SQL (SELECT-only), runs it, and saves results to a local CSV file.
+    Validates the SQL (SELECT-only), runs it, and saves results to S3 as a CSV file.
     """
-    # db_config will be injected by process_tool_call, not provided by LLM
+    # db_config and s3_config will be injected by process_tool_call, not provided by LLM
 
     assert db_config is not None, "db_config is required but was not provided"
+    assert s3_config is not None, "s3_config is required but was not provided"
 
     # --- Step 1: Validate SQL ---
     try:
@@ -138,17 +148,41 @@ async def run_query_save_results(query: str, db_config: Optional[DatabaseConfig]
             return SaveQueryResultsResponse(success=False, error="Query returned no results.")
 
         row_count = len(records)
-        os.makedirs("results", exist_ok=True)
+        
+        # Generate S3 key with date-based folder structure
+        today = datetime.now().strftime("%Y-%m-%d")
         filename = f"query_result_{uuid4().hex[:8]}.csv"
-        filepath = os.path.join("results", filename)
+        s3_key = f"postgres_agent_query_results/{today}/{filename}"
+        
+        # Create CSV content in memory
+        csv_content = []
+        csv_content.append(list(records[0].keys()))  # CSV header
+        for row in records:
+            csv_content.append(list(row.values()))
+        
+        # Convert to CSV string
+        csv_string = ""
+        for row in csv_content:
+            csv_string += ",".join(f'"{str(cell).replace('"', '""')}"' for cell in row) + "\n"
+        
+        # Upload to S3
+        session = aioboto3.Session(
+            aws_access_key_id=s3_config.aws_access_key_id,
+            aws_secret_access_key=s3_config.aws_secret_access_key,
+            region_name=s3_config.aws_region
+        )
+        async with session.client('s3') as s3_client:  # type: ignore
+            await s3_client.put_object(
+                Bucket=s3_config.s3_bucket_name,
+                Key=s3_key,
+                Body=csv_string.encode('utf-8'),
+                ContentType='text/csv'
+            )
+        
+        # Generate S3 URL
+        s3_url = f"https://{s3_config.s3_bucket_name}.s3.{s3_config.aws_region}.amazonaws.com/{s3_key}"
 
-        with open(filepath, mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(records[0].keys())  # CSV header
-            for row in records:
-                writer.writerow(list(row.values()))
-
-        return SaveQueryResultsResponse(success=True, file_path=filepath, row_count=row_count, query_time_ms=int((end - start) * 1000))
+        return SaveQueryResultsResponse(success=True, s3_url=s3_url, row_count=row_count, query_time_ms=int((end - start) * 1000))
 
     except Exception as e:
         return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")

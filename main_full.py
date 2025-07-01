@@ -28,11 +28,19 @@ class AgentFinalOutput(BaseModel):
 
 # Define deps
 @dataclass
+class S3Config:
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_region: str
+    s3_bucket_name: str
+
+@dataclass
 class PostgresDeps:
     user: str
     password: str
     database: str
     host: str
+    s3_config: S3Config
 
 # Process tool call function to inject database dependencies
 async def process_tool_call(
@@ -41,7 +49,7 @@ async def process_tool_call(
     tool_name: str,
     args: dict[str, Any],
 ) -> ToolResult:
-    """Inject database credentials into MCP tool calls."""
+    """Inject database credentials and S3 config into MCP tool calls."""
     # Add database config to the tool arguments
     db_config = {
         "user": ctx.deps.user,
@@ -51,8 +59,17 @@ async def process_tool_call(
         "port": 5432
     }
     
-    # Add db_config to the tool arguments
+    # Add S3 config to the tool arguments
+    s3_config = {
+        "aws_access_key_id": ctx.deps.s3_config.aws_access_key_id,
+        "aws_secret_access_key": ctx.deps.s3_config.aws_secret_access_key,
+        "aws_region": ctx.deps.s3_config.aws_region,
+        "s3_bucket_name": ctx.deps.s3_config.s3_bucket_name,
+    }
+    
+    # Add configs to the tool arguments
     args['db_config'] = db_config
+    args['s3_config'] = s3_config
     
     return await call_tool(tool_name, args, {})
 
@@ -74,17 +91,25 @@ agent = Agent(
 # Main event loop
 async def main():
     # Validate required environment variables
-    required_env_vars = ["PGUSER", "PGPASSWORD", "PGDATABASE", "PGHOST"]
+    required_env_vars = ["PGUSER", "PGPASSWORD", "PGDATABASE", "PGHOST", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME"]
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {missing_vars}")
+
+    s3_config = S3Config(
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+        aws_region=os.getenv("AWS_DEFAULT_REGION", "us-west-2"),
+        s3_bucket_name=os.getenv("S3_BUCKET_NAME", ""),
+    )
 
     deps = PostgresDeps(
         user=os.getenv("PGUSER", ""),
         password=os.getenv("PGPASSWORD", ""),
         database=os.getenv("PGDATABASE", ""),
         host=os.getenv("PGHOST", ""),
+        s3_config=s3_config,
     )
 
     print("🚀 Starting Full Metadata AI Agent (type 'exit' to quit)")
