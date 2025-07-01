@@ -8,7 +8,7 @@ from typing import Optional, List, Dict
 import sqlparse
 from sqlparse.tokens import DDL, DML
 import asyncpg
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastmcp import FastMCP
 from metadata_cache import PostgresMetadataCache
 import aioboto3
@@ -39,11 +39,11 @@ class DatabaseMetadata(BaseModel):
     tables: List[TableFullMetadata]
 
 class SaveQueryResultsResponse(BaseModel):
-    success: bool
-    s3_url: Optional[str] = None
-    row_count: Optional[int] = None
-    query_time_ms: Optional[int] = None
-    error: Optional[str] = None
+    success: bool = Field(description="Whether the query execution and S3 upload was successful")
+    s3_url: Optional[str] = Field(default=None, description="Presigned URL to download the CSV file from S3 (expires in 1 hour)")
+    row_count: Optional[int] = Field(default=None, description="Number of rows returned by the query")
+    query_time_ms: Optional[int] = Field(default=None, description="Total time for query execution and S3 upload in milliseconds")
+    error: Optional[str] = Field(default=None, description="Error message if the operation failed")
 
 # Add DatabaseConfig model for MCP tools
 class DatabaseConfig(BaseModel):
@@ -179,10 +179,14 @@ async def run_query_save_results(query: str, db_config: Optional[DatabaseConfig]
                 ContentType='text/csv'
             )
         
-        # Generate S3 URL
-        s3_url = f"https://{s3_config.s3_bucket_name}.s3.{s3_config.aws_region}.amazonaws.com/{s3_key}"
+        # Generate presigned URL (expires in 1 hour)
+        presigned_url = await s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': s3_config.s3_bucket_name, 'Key': s3_key},
+            ExpiresIn=3600  # 1 hour
+        )
 
-        return SaveQueryResultsResponse(success=True, s3_url=s3_url, row_count=row_count, query_time_ms=int((end - start) * 1000))
+        return SaveQueryResultsResponse(success=True, s3_url=presigned_url, row_count=row_count, query_time_ms=int((end - start) * 1000))
 
     except Exception as e:
         return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")

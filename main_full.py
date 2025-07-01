@@ -1,7 +1,7 @@
 import asyncio
 from agent_prompt_full import system_prompt_full
 from pydantic_ai import Agent
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dataclasses import dataclass
 from typing import Optional, Any
 from pydantic_ai.mcp import MCPServerStreamableHTTP, CallToolFunc, ToolResult
@@ -17,14 +17,14 @@ logfire.instrument_pydantic_ai()
 
 # Agent output schema
 class AgentFinalOutput(BaseModel):
-    sql: str
-    reasoning: str
-    s3_url: Optional[str] = None
-    success: bool
-    row_count: Optional[int] = None
-    query_time_ms: Optional[int] = None
-    error: Optional[str] = None
-    confidence: float
+    sql: str = Field(description="The SQL query that was executed")
+    reasoning: str = Field(description="The agent's reasoning for choosing this SQL query")
+    s3_url: Optional[str] = Field(None, description="URL to download the CSV file with query results from S3")
+    success: bool = Field(description="Whether the query execution was successful")
+    row_count: Optional[int] = Field(None, description="Number of rows returned by the query")
+    query_time_ms: Optional[int] = Field(None, description="Query execution time in milliseconds")
+    error: Optional[str] = Field(None, description="Error message if the query failed")
+    confidence: float = Field(description="Agent's confidence in the SQL query (0.0 to 1.0)")
 
 # Define deps
 @dataclass
