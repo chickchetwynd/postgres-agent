@@ -186,7 +186,10 @@ async def run_query_save_results(query: str, db_config: Optional[DatabaseConfig]
             ExpiresIn=3600  # 1 hour
         )
 
-        return SaveQueryResultsResponse(success=True, s3_url=presigned_url, row_count=row_count, query_time_ms=int((end - start) * 1000))
+        # Clean the URL to prevent HTML encoding issues
+        clean_url = presigned_url.replace('&amp;', '&')
+
+        return SaveQueryResultsResponse(success=True, s3_url=clean_url, row_count=row_count, query_time_ms=int((end - start) * 1000))
 
     except Exception as e:
         return SaveQueryResultsResponse(success=False, error=f"Execution failed: {str(e)}")
