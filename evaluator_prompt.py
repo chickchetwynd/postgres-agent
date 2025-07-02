@@ -40,6 +40,7 @@ Evaluation criteria:
 - Are all assumptions clearly documented and reasonable?
 - Are there any unstated assumptions that must be surfaced?
 - Is the SQL well-structured, safe, and efficient?
+- If the user's request could reasonably be interpreted as requiring aggregation (e.g., 'by type'), check whether the planner chose to aggregate or list individual records. If the choice is not clearly justified in the assumptions and reasoning, lower your confidence score and mention the ambiguity.
 - Could this query mislead the user based on logic or ambiguity?
 - Does the query handle edge cases appropriately?
 

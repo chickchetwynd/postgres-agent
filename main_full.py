@@ -18,23 +18,23 @@ logfire.instrument_pydantic_ai()
 
 # Agent output schema
 class PlannerOutput(BaseModel):
-    sql: str = Field(description="The generated SQL query")
-    reasoning: str = Field(description="Reasoning for the SQL query")
-    assumptions: List[str] = Field(description="List of assumptions made during query generation")
+    sql: str = Field(description="The generated SQL SELECT query")
+    reasoning: str = Field(description="Step-by-step reasoning explaining how the query maps to the user's request")
+    assumptions: List[str] = Field(description="List of strings, where each string is one assumption (e.g., ['Q2 means April-June', 'performance means conversion_rate'])")
     success: bool = Field(description="Whether query generation was successful")
-    error: Optional[str] = Field(default=None, description="Error if generation failed")
+    error: Optional[str] = Field(default=None, description="Error message if generation failed")
 
 class EvaluatorOutput(BaseModel):
     success: bool = Field(description="Whether the query was executed successfully")
-    confidence: float = Field(description="Confidence score (0.0 to 1.0)")
-    confidence_reasoning: str = Field(description="Detailed explanation of the confidence score")
-    sql: str = Field(description="The generated SQL query")
-    reasoning: str = Field(description="Reasoning for the SQL query")
-    assumptions: List[str] = Field(description="Assumptions from the planner phase")
-    s3_url: Optional[str] = Field(default=None, description="S3 URL if query was executed")
-    row_count: Optional[int] = Field(default=None, description="Number of rows returned")
+    confidence: float = Field(description="Confidence score (0.0 to 1.0) based on accuracy, clarity, and alignment with user request")
+    confidence_reasoning: str = Field(description="Detailed explanation of confidence assessment including evaluation of assumptions and potential issues")
+    sql: str = Field(description="The SQL query from the planner phase")
+    reasoning: str = Field(description="The reasoning from the planner phase")
+    assumptions: List[str] = Field(description="All assumptions (from planner + any additional ones discovered during evaluation)")
+    s3_url: Optional[str] = Field(default=None, description="S3 URL returned by the run_query_save_results tool. Null if `success` is false.")
+    row_count: Optional[int] = Field(default=None, description="Number of rows returned by the query")
     query_time_ms: Optional[int] = Field(default=None, description="Query execution time in milliseconds")
-    error: Optional[str] = Field(default=None, description="Error message if execution failed")
+    error: Optional[str] = Field(default=None, description="Error message if execution failed or query was rejected")
 
 # Define deps
 @dataclass
