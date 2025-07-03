@@ -1,6 +1,6 @@
 import asyncio
 from planner_prompt import planner_prompt
-from evaluator_prompt import evaluator_prompt
+from evaluator_prompt import third_evaluator_prompt
 from pydantic_ai import Agent
 from pydantic import BaseModel, Field
 from dataclasses import dataclass
@@ -103,7 +103,7 @@ evaluator_agent = Agent(
     "anthropic:claude-3-opus-20240229",
     mcp_servers=[full_postgres_server],
     output_type=EvaluatorOutput,
-    instructions=evaluator_prompt,
+    instructions=third_evaluator_prompt,
     deps_type=PostgresDeps
 )
 
@@ -131,57 +131,39 @@ async def main():
         s3_config=s3_config,
     )
 
-    print("🚀 Starting Two-Phase AI Agent (type 'exit' to quit)")
-    
-    # 🔄 RUN BOTH AGENTS' MCP SERVERS
+    print("Starting Two-Phase AI Agent (type 'exit' to quit)")
     async with planner_agent.run_mcp_servers(), evaluator_agent.run_mcp_servers():
         while True:
-            user_input = input("\n📝 Prompt: ")
+            user_input = input("\nPrompt: ")
             if user_input.strip().lower() in {"exit", "quit"}:
-                print("👋 Exiting.")
+                print("Exiting.")
                 break
 
             try:
-                # -------------------------
-                # 🔍 PHASE 1: Planning Agent
-                # -------------------------
-                print("\n🔍 Phase 1: Planning...")
+                # Phase 1: Planner Agent
+                print("\n[Phase 1] Planner agent running...")
                 planner_result = await planner_agent.run(user_input, deps=deps)
                 planner_output = planner_result.output
+                print("Planner output:")
+                print(planner_output.model_dump_json(indent=2))
 
                 if not planner_output.success:
-                    print(f"❌ Planner failed: {planner_output.error}")
+                    print(f"Planner failed: {planner_output.error}")
                     continue
 
-                print(f"✅ SQL: {planner_output.sql[:100]}...")
-                print(f"💭 Reasoning: {planner_output.reasoning}")
-                print(f"🧠 Assumptions: {planner_output.assumptions}")
-
-                # -------------------------
-                # ⚖️ PHASE 2: Evaluator Agent
-                # -------------------------
-                print("\n⚖️ Phase 2: Evaluating...")
-
+                # Phase 2: Evaluator Agent
+                print("\n[Phase 2] Evaluator agent running...")
                 evaluator_result = await evaluator_agent.run(
-                    f"Evaluate this SQL query: {planner_output.sql}\n\nReasoning: {planner_output.reasoning}\n\nAssumptions: {planner_output.assumptions}\n\nOriginal request: {user_input}",
+                    "Please evaluate the planner's output in the message history and decide whether to execute.",
                     message_history=planner_result.new_messages(),
                     deps=deps
                 )
                 evaluator_output = evaluator_result.output
-
-                print(f"🔢 Confidence: {evaluator_output.confidence:.2f}")
-                print(f"🧠 Confidence Reasoning: {evaluator_output.confidence_reasoning}")
-
-                if evaluator_output.success:
-                    print("✅ Query executed successfully!")
-                    print(f"📊 Rows: {evaluator_output.row_count}")
-                    print(f"⏱️ Time: {evaluator_output.query_time_ms}ms")
-                    print(f"📁 S3 URL: {evaluator_output.s3_url}")
-                else:
-                    print(f"❌ Query rejected: {evaluator_output.error}")
+                print("Final agent output:")
+                print(evaluator_output.model_dump_json(indent=2))
 
             except Exception as e:
-                print("❌ Error:", str(e))
+                print("Error:", str(e))
 
 if __name__ == "__main__":
     asyncio.run(main())
