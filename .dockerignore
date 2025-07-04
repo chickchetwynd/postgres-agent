@@ -1,0 +1,12 @@
+__pycache__/
+.venv/
+*.pyc
+*.pyo
+*.pyd
+.env
+.git/
+.DS_Store
+client/
+results/
+images/
+seed/

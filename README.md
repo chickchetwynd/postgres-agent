@@ -156,15 +156,24 @@ This will populate your tables with randomly generated data that you can test th
 
 ### Run the Agent
 
-Now that postgres is setup and ready, let's run the agent. We will need to run the MCP server first:
+Now that postgres is setup and ready, let's run the agent. We will need to run the MCP server first on a docker container.
+
+- First build the docker image:
 
 ```bash
-fastmcp run full_postgres_server.py --transport streamable-http
+docker build -f server/Dockerfile -t postgres-agent-server .
 ```
-Then in a separate terminal, run:
+
+- Then run the image:
+
+```bash
+docker run -p 8000:8000 postgres-agent-server
+```
+
+Then in a separate terminal start the client. Run:
 
 ```
-uv run main_full.py
+uv run client/main_full.py
 ```
 
 The terminal will now ask for you to prompt the agent. Ask a question like, "List enterprise accounts with no contact in 30+ days". The MCP client will communicate with the server through http.

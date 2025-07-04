@@ -1,0 +1,30 @@
+FROM python:3.13-slim
+
+# Disable Python bytecode files and enable real-time log output
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set working directory inside the container
+WORKDIR /app
+
+# Install uv (universal virtualenv & dependency manager)
+RUN pip install uv
+
+# Copy dependency definitions from the root of your repo
+COPY pyproject.toml uv.lock ./
+
+# Install project dependencies into system environment
+RUN uv sync
+
+
+# Copy only the server directory into the image
+COPY server/ ./server/
+
+# Set working directory to server/
+WORKDIR /app/server
+
+# Expose the port your MCP server listens on
+EXPOSE 8000
+
+# Run the MCP server using FastMCP
+CMD ["/app/.venv/bin/fastmcp", "run", "full_postgres_server.py", "--transport", "streamable-http", "--host", "0.0.0.0"]
