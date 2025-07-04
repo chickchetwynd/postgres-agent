@@ -1,6 +1,6 @@
 import asyncio
-from planner_prompt import planner_prompt
-from evaluator_prompt import third_evaluator_prompt
+from planner_prompt import third_planner_prompt
+from evaluator_prompt import fourth_evaluator_prompt
 from pydantic_ai import Agent
 from pydantic import BaseModel, Field
 from dataclasses import dataclass
@@ -20,7 +20,13 @@ logfire.instrument_pydantic_ai()
 class PlannerOutput(BaseModel):
     sql: str = Field(description="The generated SQL SELECT query")
     reasoning: str = Field(description="Step-by-step reasoning explaining how the query maps to the user's request")
-    assumptions: List[str] = Field(description="List of strings, where each string is one assumption (e.g., ['Q2 means April-June', 'performance means conversion_rate'])")
+    prompt_ambiguities: Optional[List[str]] = Field(
+        default=None,
+        description="A list of strings, where each string is one ambiguity in the user's request, or null if no ambiguities")
+    assumptions: Optional[List[str]] = Field(
+        default=None,
+        description="A list of strings, where each string is one assumption (e.g., ['Q2 means April-June', 'performance means conversion_rate']), or null if no assumptions"
+    )
     success: bool = Field(description="Whether query generation was successful")
     error: Optional[str] = Field(default=None, description="Error message if generation failed")
 
@@ -92,18 +98,18 @@ full_postgres_server = MCPServerStreamableHTTP(
 
 # Replace the single agent with two agents
 planner_agent = Agent(
-    "anthropic:claude-3-opus-20240229",
+    "anthropic:claude-3-5-sonnet-20241022",
     mcp_servers=[full_postgres_server],
     output_type=PlannerOutput,
-    instructions=planner_prompt,
+    instructions=third_planner_prompt,
     deps_type=PostgresDeps
 )
 
 evaluator_agent = Agent(
-    "anthropic:claude-3-opus-20240229",
+    "anthropic:claude-3-5-sonnet-20241022",
     mcp_servers=[full_postgres_server],
     output_type=EvaluatorOutput,
-    instructions=third_evaluator_prompt,
+    instructions=fourth_evaluator_prompt,
     deps_type=PostgresDeps
 )
 
