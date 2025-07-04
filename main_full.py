@@ -1,6 +1,6 @@
 import asyncio
-from planner_prompt import third_planner_prompt
-from evaluator_prompt import fourth_evaluator_prompt
+from planner_prompt import planner_prompt
+from evaluator_prompt import evaluator_prompt
 from pydantic_ai import Agent
 from pydantic import BaseModel, Field
 from dataclasses import dataclass
@@ -101,7 +101,7 @@ planner_agent = Agent(
     "anthropic:claude-3-5-sonnet-20241022",
     mcp_servers=[full_postgres_server],
     output_type=PlannerOutput,
-    instructions=third_planner_prompt,
+    instructions=planner_prompt,
     deps_type=PostgresDeps
 )
 
@@ -109,7 +109,7 @@ evaluator_agent = Agent(
     "anthropic:claude-3-5-sonnet-20241022",
     mcp_servers=[full_postgres_server],
     output_type=EvaluatorOutput,
-    instructions=fourth_evaluator_prompt,
+    instructions=evaluator_prompt,
     deps_type=PostgresDeps
 )
 
