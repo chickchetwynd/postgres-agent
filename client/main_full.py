@@ -10,6 +10,7 @@ from pydantic_ai.tools import RunContext
 from dotenv import load_dotenv
 import os
 import logfire
+import argparse
 
 load_dotenv()
 
@@ -91,8 +92,20 @@ async def process_tool_call(
     return await call_tool(tool_name, args, {})
 
 
+# server config
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--server-url",
+    help="URL of the MCP server",
+    default=os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8000/mcp")
+)
+args = parser.parse_args()
+
+server_url = args.server_url
+print(f"Connecting to server at: {server_url}")
+
 full_postgres_server = MCPServerStreamableHTTP(
-    'http://127.0.0.1:8000/mcp',
+    server_url,
     process_tool_call=process_tool_call
 )
 

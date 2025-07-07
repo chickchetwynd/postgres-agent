@@ -1,0 +1,7 @@
+services:
+  postgres-agent-server:
+    image: chickchetwyndairfold/postgres-agent-server:latest
+    container_name: postgres-agent-server
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

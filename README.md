@@ -178,6 +178,18 @@ uv run client/main_full.py
 
 The terminal will now ask for you to prompt the agent. Ask a question like, "List enterprise accounts with no contact in 30+ days". The MCP client will communicate with the server through http.
 
+### MCP Server - EC2
+
+The MCP server is running on an EC2 service currently and the project will default to point at the server for requests. Sometimes the server crashes and needs to be restarted. To do that, run:
+
+```bash
+# to ssh into the server
+ssh -i /Users/chick/Desktop/postgres-agent.pem ubuntu@18.191.195.92 
+
+# to restart the image
+docker restart postgres-agent-server
+```
+
 
 ### Observing the agent
 
