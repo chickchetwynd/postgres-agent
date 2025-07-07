@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 import os
 import logfire
 import argparse
+from fastapi import FastAPI, HTTPException
+import uvicorn
 
 load_dotenv()
 
