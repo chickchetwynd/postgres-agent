@@ -190,6 +190,16 @@ ssh -i /Users/chick/Desktop/postgres-agent.pem ubuntu@18.191.195.92
 docker restart postgres-agent-server
 ```
 
+To re-run the image:
+
+```bash
+# Get the image from docker hub
+curl -O https://airfold-postgres-agent-config.s3.us-east-2.amazonaws.com/compose.yaml
+
+# Run the image
+docker compose up -d
+```
+
 
 ### Observing the agent
 
