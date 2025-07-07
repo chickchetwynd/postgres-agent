@@ -12,8 +12,35 @@ import os
 import logfire
 import argparse
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import uvicorn
 
+# Add module-level variables for MCP contexts
+planner_mcp_context = None
+evaluator_mcp_context = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global planner_mcp_context, evaluator_mcp_context
+    # Startup
+    planner_mcp_context = planner_agent.run_mcp_servers()
+    evaluator_mcp_context = evaluator_agent.run_mcp_servers()
+    
+    await planner_mcp_context.__aenter__()
+    await evaluator_mcp_context.__aenter__()
+    print("✅ MCP servers started")
+    
+    yield
+    
+    # Shutdown
+    if planner_mcp_context:
+        await planner_mcp_context.__aexit__(None, None, None)
+    if evaluator_mcp_context:
+        await evaluator_mcp_context.__aexit__(None, None, None)
+    print("🛑 MCP servers stopped")
+
+app = FastAPI(lifespan=lifespan)
 load_dotenv()
 
 logfire.configure()
@@ -44,6 +71,9 @@ class EvaluatorOutput(BaseModel):
     row_count: Optional[int] = Field(default=None, description="Number of rows returned by the query")
     query_time_ms: Optional[int] = Field(default=None, description="Query execution time in milliseconds")
     error: Optional[str] = Field(default=None, description="Error message if execution failed or query was rejected")
+
+class AgentRequest(BaseModel):
+    prompt:str
 
 # Define deps
 @dataclass
@@ -186,5 +216,57 @@ async def main():
             except Exception as e:
                 print("Error:", str(e))
 
+
+@app.post("/agent")
+async def agent(req: AgentRequest):
+    try:
+        # validate env vars
+        required_env_vars = ["PGUSER", "PGPASSWORD", "PGDATABASE", "PGHOST", 
+                             "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME"]
+        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+        if missing_vars:
+            raise HTTPException(status_code=500, detail=f"Missing env vars: {missing_vars}")
+
+        # build deps
+        s3_config = S3Config(
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+            aws_region=os.getenv("AWS_DEFAULT_REGION", "us-west-2"),
+            s3_bucket_name=os.getenv("S3_BUCKET_NAME", ""),
+        )
+
+        deps = PostgresDeps(
+            user=os.getenv("PGUSER", ""),
+            password=os.getenv("PGPASSWORD", ""),
+            database=os.getenv("PGDATABASE", ""),
+            host=os.getenv("PGHOST", ""),
+            s3_config=s3_config,
+        )
+
+        # Phase 1: planner
+        planner_result = await planner_agent.run(req.prompt, deps=deps)
+        if not planner_result.output.success:
+            return {"planner_output": planner_result.output.model_dump(), "evaluator_output": None}
+
+        # Phase 2: evaluator
+        evaluator_result = await evaluator_agent.run(
+            "Please evaluate the planner's output in the message history and decide whether to execute.",
+            message_history=planner_result.new_messages(),
+            deps=deps
+        )
+
+        return JSONResponse(content={
+            "planner_output": planner_result.output.model_dump(),
+            "evaluator_output": evaluator_result.output.model_dump()
+        })
+
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    if "--cli" in sys.argv:
+        asyncio.run(main())
+    else:
+        uvicorn.run("main_full:app", host="0.0.0.0", port=8080, reload=True)
