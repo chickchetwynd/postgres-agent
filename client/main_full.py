@@ -131,6 +131,11 @@ parser.add_argument(
     help="URL of the MCP server",
     default=os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8000/mcp")
 )
+parser.add_argument(
+    "--cli",
+    action="store_true",
+    help="Run in CLI mode instead of starting the FastAPI server"
+)
 args = parser.parse_args()
 
 server_url = args.server_url
