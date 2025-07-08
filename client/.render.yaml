@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: airfold-postgres-agent
+    rootDir: client
+    plan: starter
+    runtime: python
+    repo: https://github.com/airfold/airfold-postgres-agent
+    buildCommand: uv sync --frozen && uv cache prune --ci
+    startCommand: uvicorn main_full:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: MCP_SERVER_URL
+        sync: false
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      - key: PGHOST
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        sync: false
+      - key: LOGFIRE_TOKEN
+        sync: false
+      - key: LOGFIRE_ENVIRONMENT
+        sync: false
+    autoDeploy: true

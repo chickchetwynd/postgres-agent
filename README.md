@@ -217,6 +217,14 @@ uv run client/main_full.py
 
 This is the same command as before but without any flags. This will default to running a uvicorn process locally.
 
+The server in production runs on Render. Try making an api call, example:
+
+```bash
+curl -s -X POST https://airfold-postgres-agent.onrender.com/agent \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Show me revenue by quarter"}'
+```
+
 ### Observing the agent
 
 There are a few observability tools built into this project that you can run to observe the agent.
