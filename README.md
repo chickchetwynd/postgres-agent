@@ -189,7 +189,7 @@ The MCP server is running on an EC2 service currently and the project will defau
 
 ```bash
 # to ssh into the server
-ssh -i /Users/chick/Desktop/postgres-agent.pem ubuntu@18.191.195.92 
+ssh -i postgres-agent.pem ubuntu@18.191.195.92
 
 # to restart the image
 docker restart postgres-agent-server
