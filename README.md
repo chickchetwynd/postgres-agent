@@ -154,7 +154,7 @@ uv run seed_data.py
 This will populate your tables with randomly generated data that you can test the agent against.
 
 
-### Run the Agent
+### Run the Agent in Dev
 
 Now that postgres is setup and ready, let's run the agent. We will need to run the MCP server first on a docker container.
 
@@ -173,14 +173,19 @@ docker run -p 8000:8000 postgres-agent-server
 Then in a separate terminal start the client. Run:
 
 ```
-uv run client/main_full.py
+uv run client/main_full.py --cli --http://127.0.0.1:8000/mcp
 ```
+
+Note: You can also change the --server-url if you would like the server to be run in a different location.
 
 The terminal will now ask for you to prompt the agent. Ask a question like, "List enterprise accounts with no contact in 30+ days". The MCP client will communicate with the server through http.
 
-### MCP Server - EC2
 
-The MCP server is running on an EC2 service currently and the project will default to point at the server for requests. Sometimes the server crashes and needs to be restarted. To do that, run:
+### Running in Production
+
+#### MCP Server EC2
+
+The MCP server is running on an EC2 service currently and the project will default to point at the server for requests if you do not specify a --server-url. Sometimes the server crashes and needs to be restarted. To do that, run:
 
 ```bash
 # to ssh into the server
@@ -200,6 +205,17 @@ curl -O https://airfold-postgres-agent-config.s3.us-east-2.amazonaws.com/compose
 docker compose up -d
 ```
 
+#### Client and FastAPI
+
+In production, this agent runs as a microservice. It can be accessed via api calls where the header must include a prompt. The functionality of main_full.py is wrapped in FastAPI so that you can send POST requests and receive the final Agent response back.
+
+To run the client server:
+
+```bash
+uv run client/main_full.py
+```
+
+This is the same command as before but without any flags. This will default to running a uvicorn process locally.
 
 ### Observing the agent
 
