@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 load_dotenv()
 
-logfire.configure()
+logfire.configure(environment=os.getenv("LOGFIRE_ENVIRONMENT", "local"))
 logfire.instrument_pydantic_ai()
 
 # Agent output schema
