@@ -124,27 +124,15 @@ async def process_tool_call(
     return await call_tool(tool_name, args, {})
 
 
-# server config
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--server-url",
-    help="URL of the MCP server",
-    default=os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8000/mcp")
-)
-parser.add_argument(
-    "--cli",
-    action="store_true",
-    help="Run in CLI mode instead of starting the FastAPI server"
-)
-args = parser.parse_args()
-
-server_url = args.server_url
+# MCP server config
+server_url = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8000/mcp")
 print(f"Connecting to server at: {server_url}")
 
 full_postgres_server = MCPServerStreamableHTTP(
     server_url,
     process_tool_call=process_tool_call
 )
+
 
 # Replace the single agent with two agents
 planner_agent = Agent(
@@ -270,8 +258,18 @@ async def agent(req: AgentRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    import sys
-    if "--cli" in sys.argv:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--cli",
+        action="store_true",
+        help="Run in CLI mode instead of starting the FastAPI server"
+    )
+    args = parser.parse_args()
+
+    if args.cli:
         asyncio.run(main())
     else:
         uvicorn.run("main_full:app", host="0.0.0.0", port=10000, reload=True)
+
