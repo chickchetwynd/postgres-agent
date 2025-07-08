@@ -274,4 +274,4 @@ if __name__ == "__main__":
     if "--cli" in sys.argv:
         asyncio.run(main())
     else:
-        uvicorn.run("main_full:app", host="0.0.0.0", port=8080, reload=True)
+        uvicorn.run("main_full:app", host="0.0.0.0", port=10000, reload=True)
