@@ -12,3 +12,6 @@ wheels/
 
 #data
 results/
+
+# EC2 SSH key
+postgres-agent.pem
