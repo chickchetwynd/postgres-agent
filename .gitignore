@@ -8,7 +8,7 @@ wheels/
 
 #environment stuff
 .venv
-.env
+**/.env
 
 #data
 results/
