@@ -249,7 +249,7 @@ async def agent(req: AgentRequest):
         )
 
         return JSONResponse(content={
-            "planner_output": planner_result.output.model_dump(),
+#            "planner_output": planner_result.output.model_dump(), # don't send planner output in final response for now.
             "evaluator_output": evaluator_result.output.model_dump()
         })
 
