@@ -4,14 +4,14 @@ from evaluator_prompt import evaluator_prompt
 from pydantic_ai import Agent
 from pydantic import BaseModel, Field
 from dataclasses import dataclass
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Annotated
 from pydantic_ai.mcp import MCPServerStreamableHTTP, CallToolFunc, ToolResult
 from pydantic_ai.tools import RunContext
 from dotenv import load_dotenv
 import os
 import logfire
 import argparse
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
@@ -210,15 +210,27 @@ async def main():
                 print("Error:", str(e))
 
 
-@app.post("/agent")
-async def agent(req: AgentRequest):
+@app.post(
+    "/agent",
+    summary="Run the postgres agent",
+    description="Run this agent by providing the postgres credentials in the headers and the prompt in the body. Will return the final agent output.",
+    )
+async def agent(
+    req: AgentRequest,
+    pg_user: Annotated[str, Header()],
+    pg_database: Annotated[str, Header()],
+    pg_host: Annotated[str, Header()],
+    pg_password: Annotated[str, Header()]
+    ):
+    """
+    Runs the AI agent to translate a natural language prompt into a SQL query and execute it on the specified Postgres database.
+
+    - **pg_user**: Postgres user (header: `pg-user`)
+    - **pg_database**: Postgres database name (header: `pg-database`)
+    - **pg_host**: Postgres host (header: `pg-host`)
+    - **pg_password**: Postgres password (header: `pg-password`)
+    """
     try:
-        # validate env vars
-        required_env_vars = ["PGUSER", "PGPASSWORD", "PGDATABASE", "PGHOST", 
-                             "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME"]
-        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-        if missing_vars:
-            raise HTTPException(status_code=500, detail=f"Missing env vars: {missing_vars}")
 
         # build deps
         s3_config = S3Config(
@@ -229,10 +241,10 @@ async def agent(req: AgentRequest):
         )
 
         deps = PostgresDeps(
-            user=os.getenv("PGUSER", ""),
-            password=os.getenv("PGPASSWORD", ""),
-            database=os.getenv("PGDATABASE", ""),
-            host=os.getenv("PGHOST", ""),
+            user=pg_user,
+            password=pg_password,
+            database=pg_database,
+            host=pg_host,
             s3_config=s3_config,
         )
 
