@@ -220,9 +220,17 @@ This is the same command as before but without any flags. This will default to r
 The server in production runs on Render. Try making an api call, example:
 
 ```bash
-curl -s -X POST https://airfold-postgres-agent.onrender.com/agent \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Show me revenue by quarter"}'
+curl -X 'POST' \
+  'https://airfold-postgres-agent.onrender.com/agent' \
+  -H 'accept: application/json' \
+  -H 'pg-user: <>' \
+  -H 'pg-database: <>' \
+  -H 'pg-host: <>' \
+  -H 'pg-password: <>>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "prompt": "<your prompt goes here>"
+}'
 ```
 
 ### Observing the agent
