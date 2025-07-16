@@ -16,10 +16,10 @@ def random_date():
 
 async def seed_data():
     conn = await asyncpg.connect(
-        user=os.getenv("PGUSER"),
-        password=os.getenv("PGPASSWORD"),
-        database=os.getenv("PGDATABASE"),
-        host=os.getenv("PGHOST"),
+        user="postgres.fbjsfsllfckmlsaqowxy",
+        password="",
+        database="postgres",
+        host="aws-0-us-west-1.pooler.supabase.com",
         port=5432
     )
 

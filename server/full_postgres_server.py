@@ -73,31 +73,32 @@ async def get_db_metadata(db_config: Optional[DatabaseConfig] = None) -> Databas
     - low-cardinality distinct values
     - 1 example row per table
     """
-    
     assert db_config is not None, "db_config is required but was not provided"
 
+    # Use target DB for introspection
+    conn = await asyncpg.connect(
+        user=db_config.user,
+        password=db_config.password,
+        database=db_config.database,
+        host=db_config.host,
+        port=db_config.port
+    )
+
+    # Use central cache DB for caching
+    cache_key = f"{db_config.host}:{db_config.database}"
+    cache = PostgresMetadataCache(conn, cache_key)
+    ttl_minutes = 60
+
     try:
-        conn = await asyncpg.connect(
-            user=db_config.user,
-            password=db_config.password,
-            database=db_config.database,
-            host=db_config.host,
-            port=db_config.port
-        )
-
-        cache = PostgresMetadataCache(conn)
-        cache_key = "full_metadata_cache"
-        ttl_minutes = 60
-
         # Try cache first
-        cached = await cache.get(cache_key=cache_key, ttl_minutes=ttl_minutes)
+        cached = await cache.get(ttl_minutes=ttl_minutes)
         if cached:
             return DatabaseMetadata(**cached)
 
         # Cache is missing or expired — regenerate
-        await cache.clear(cache_key)
+        await cache.clear()
         new_metadata = await cache.generate_metadata()
-        await cache.set(cache_key=cache_key, data=new_metadata)
+        await cache.set(new_metadata)
 
         return DatabaseMetadata(**new_metadata)
     finally:
