@@ -121,19 +121,29 @@ class PostgresMetadataCache:
             """, table)
             columns = [{"name": r["column_name"], "type": r["data_type"]} for r in schema_rows]
             
-            # 3.2: Low-cardinality values
+            # 3.2: NEW - Identify low-cardinality columns from pg_stats
+            low_cardinality_columns = await self.target_conn.fetch("""
+                SELECT attname, n_distinct
+                FROM pg_stats 
+                WHERE schemaname = 'public' 
+                  AND tablename = $1
+                  AND n_distinct <= 100
+                  AND n_distinct > 0
+            """, table)
+            
+            # 3.3: Get distinct values only for low-cardinality columns
             low_cardinality_values = {}
-            for col in columns:
+            for col_info in low_cardinality_columns:
+                col_name = col_info["attname"]
                 try:
                     distinct = await self.target_conn.fetch(
-                        f"SELECT DISTINCT {col['name']} FROM {table} WHERE {col['name']} IS NOT NULL LIMIT 16"
+                        f"SELECT DISTINCT {col_name} FROM {table} WHERE {col_name} IS NOT NULL LIMIT 100"
                     )
-                    if len(distinct) <= 15:
-                        low_cardinality_values[col["name"]] = [str(r[col["name"]]) for r in distinct]
+                    low_cardinality_values[col_name] = [str(r[col_name]) for r in distinct]
                 except Exception:
                     continue
             
-            # 3.3: Example row
+            # 3.4: Example row
             try:
                 example = await self.target_conn.fetchrow(f"SELECT * FROM {table} LIMIT 1")
                 example_row = dict(example) if example else None
